@@ -1,4 +1,5 @@
 #include "mongoose.h"
+#include <string.h>
 #include <sys/stat.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -27,21 +28,47 @@ static void rec_mkdir(const char *dir) {
 
 static void ev_handler(struct mg_connection *nc, int ev, void *p) {
     if (ev == MG_EV_HTTP_REQUEST) {
-        mg_serve_http(nc, (struct http_message *) p, s_http_server_opts);
         struct http_message *hm = (struct http_message *) p;
-        char *uri = hm->uri.p;
+        char *uri = strdup(hm->uri.p);
         char *base_uri = strtok(uri, "?");
         char *base_uri2 = malloc(hm->uri.len + 1);
 
         snprintf(base_uri2, hm->uri.len + 1, "%s", base_uri);
         printf("%s\n", base_uri2);
 
-        char *query = hm->query_string.p;
-        char *base_query = malloc(hm->query_string.len + 1);
         char *base_query2 = malloc(256);
-        snprintf(base_query, hm->query_string.len + 1, "%s", query);
-        mg_url_decode(base_query, hm->query_string.len + 1, base_query2, 256, 0);
-        printf("%s\n", base_query2);
+        if (hm->query_string.len > 0) {
+            char *query = strdup(hm->query_string.p);
+            char *base_query = malloc(hm->query_string.len + 1);
+            snprintf(base_query, hm->query_string.len + 1, "%s", query);
+            mg_url_decode(base_query, hm->query_string.len + 1, base_query2, 256, 0);
+            printf("%s\n", base_query2);
+        } else {
+            base_query2 = "";
+        }
+
+        struct mg_str *host = mg_get_http_header(hm, "Host");
+        char *uhost = strdup(host->p);
+
+        char *fhost = malloc(host->len + 1);
+        snprintf(fhost, host->len + 1, "%s", uhost);
+
+        printf("%s\n", fhost);
+
+        if (strncmp(base_uri2, "/", 2) == 0) {
+            if (strncmp(base_query2, "", 1) != 0) {
+                mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s", base_query2);
+            } else {
+                mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nwelcome to link shortener\r\nexample: curl https://%s/?duckduckgo.com", fhost);
+            }
+        } else {
+            if (strncmp(base_query2, "", 1) != 0) {
+                mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s, with url https://%s%s", base_query2, fhost, base_uri2);
+            } else {
+                mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\ncope about it\r\nrequest with query %s at uri %s at host %s", base_query2, base_uri2, fhost);
+            }
+        }
+        nc->flags |= MG_F_SEND_AND_CLOSE;
     }
 }
 
@@ -95,7 +122,6 @@ int main(int argc, char *argv[]) {
         printf("Failed to create listener\n");
         return 1;
     }
-
     // Set up HTTP server parameters
     mg_set_protocol_http_websocket(nc);
     s_http_server_opts.document_root = ".";  // Serve current directory
