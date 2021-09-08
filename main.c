@@ -26,6 +26,22 @@ static void rec_mkdir(const char *dir) {
     mkdir(tmp, S_IRWXU);
 }
 
+void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) {
+    if (strncmp(to, "", 1) != 0) {
+        if (strncmp(link, "/", 2) == 0) {
+            mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s", to);
+        } else {
+            mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s, with url https://%s%s", to, host, link);
+        }
+    } else {
+        if (strncmp(link, "/", 2) == 0) {
+            mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nwelcome to link shortener\r\nexample: curl https://%s/?duckduckgo.com", host);
+        } else {
+            mg_printf(nc, "HTTP/1.0 500 Internal Server Error\r\n\r\nplease include a URL to point to");
+        }
+    }
+}
+
 static void ev_handler(struct mg_connection *nc, int ev, void *p) {
     if (ev == MG_EV_HTTP_REQUEST) {
         struct http_message *hm = (struct http_message *) p;
@@ -55,44 +71,15 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
 
         printf("%s\n", fhost);
 
-        if (strncmp(base_uri2, "/", 2) == 0) {
-            if (strncmp(hm->method.p, "POST", hm->method.len) == 0) {
-                struct mg_str body = hm->body;
-                char *post_body = malloc(body.len + 1);
-                snprintf(post_body, body.len + 1, "%s", body.p);
+        if (strncmp(hm->method.p, "POST", hm->method.len) == 0) {
+            struct mg_str body = hm->body;
+            char *post_body = malloc(body.len + 1);
+            snprintf(post_body, body.len + 1, "%s", body.p);
 
-                printf("%s\n", post_body);
-                if (strncmp(post_body, "", 1) == 0) {
-                    mg_printf(nc, "HTTP/1.0 500 Missing POST Body\r\n\r\nplease include a POST body");
-                } else {
-                    mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s", post_body);
-                }
-            } else {
-                if (strncmp(base_query2, "", 1) != 0) {
-                    mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s", base_query2);
-                } else {
-                    mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nwelcome to link shortener\r\nexample: curl https://%s/?duckduckgo.com", fhost);
-                }
-            }
+            printf("%s\n", post_body);
+            make_short_url(nc, post_body, fhost, base_uri2);
         } else {
-            if (strncmp(hm->method.p, "POST", hm->method.len) == 0) {
-                struct mg_str body = hm->body;
-                char *post_body = malloc(body.len + 1);
-                snprintf(post_body, body.len + 1, "%s", body.p);
-
-                printf("%s\n", post_body);
-                if (strncmp(post_body, "", 1) == 0) {
-                    mg_printf(nc, "HTTP/1.0 500 Missing POST Body\r\n\r\nplease include a POST body");
-                } else {
-                    mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s, with url https://%s%s", post_body, fhost, base_uri2);
-                }
-            } else {
-                if (strncmp(base_query2, "", 1) != 0) {
-                    mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s, with url https://%s%s", base_query2, fhost, base_uri2);
-                } else {
-                    mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\ncope about it\r\nrequest with query %s at uri %s at host %s", base_query2, base_uri2, fhost);
-                }
-            }
+            make_short_url(nc, base_query2, fhost, base_uri2);
         }
         nc->flags |= MG_F_SEND_AND_CLOSE;
     }
