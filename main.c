@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+char *port, *data_dir, *url, *seed;
 static struct mg_serve_http_opts s_http_server_opts;
 
 static void rec_mkdir(const char *dir) {
@@ -32,6 +33,11 @@ void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) 
             mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s", to);
         } else {
             mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s, with url https://%s%s", to, host, link);
+            char *filename = malloc(strlen(data_dir) + strlen(link) + 1);
+            sprintf(filename, "%s/links%s", data_dir, link);
+            FILE *url = fopen(filename, "w+");
+            fputs(to, url);
+            fclose(url);
         }
     } else {
         if (strncmp(link, "/", 2) == 0) {
@@ -86,7 +92,6 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p) {
 }
 
 int main(int argc, char *argv[]) {
-    char *port, *data_dir, *url, *seed;
     int index;
     int c;
 
