@@ -27,15 +27,34 @@ static void rec_mkdir(const char *dir) {
     mkdir(tmp, S_IRWXU);
 }
 
+bool file_exists(char *filename) {
+    struct stat buffer;
+    return (stat (filename, &buffer) == 0);
+}
+
+char *get_link_filename(char *link) {
+    char *filename = malloc(strlen(data_dir) + strlen(link) + 1);
+    sprintf(filename, "%s/links%s", data_dir, link);
+    return filename;
+}
+
+bool link_exists(char *link) {
+    char *filename = malloc(strlen(data_dir) + strlen(link) + 1);
+    sprintf(filename, "%s/links%s", data_dir, link);
+    return file_exists(filename);
+}
+
+FILE *get_link_file(char *link, const char *mode) {
+    return fopen(get_link_filename(link), mode);
+}
+
 void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) {
     if (strncmp(to, "", 1) != 0) {
         if (strncmp(link, "/", 2) == 0) {
             mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s", to);
         } else {
             mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s, with url https://%s%s", to, host, link);
-            char *filename = malloc(strlen(data_dir) + strlen(link) + 1);
-            sprintf(filename, "%s/links%s", data_dir, link);
-            FILE *url = fopen(filename, "w+");
+            FILE *url = get_link_file(link, "w+");
             fputs(to, url);
             fclose(url);
         }
@@ -43,7 +62,15 @@ void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) 
         if (strncmp(link, "/", 2) == 0) {
             mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nwelcome to link shortener\r\nexample: curl https://%s/?duckduckgo.com", host);
         } else {
-            mg_printf(nc, "HTTP/1.0 500 Internal Server Error\r\n\r\nplease include a URL to point to");
+            if (link_exists(link)) {
+                FILE *url = get_link_file(link, "r");
+                char *urlto = malloc(256);
+                fgets(urlto, 256, url);
+                fclose(url);
+                mg_http_send_redirect(nc, 302, mg_mk_str(urlto), mg_mk_str(NULL));
+            } else {
+                mg_printf(nc, "HTTP/1.0 404 Not Found\r\n\r\nthis short link does not exist");
+            }
         }
     }
 }
