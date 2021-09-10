@@ -1,0 +1,10 @@
+server {
+	rewrite_log on;
+	server_name your.doma.in;
+
+	location / {
+        proxy_pass http://localhost:8080;
+	}
+
+    listen 80 ; # use certbot to enable https
+}

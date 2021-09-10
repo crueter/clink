@@ -1,4 +1,3 @@
 *.o
-linkserv
-index.cgi
+clink
 link

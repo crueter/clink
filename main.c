@@ -6,7 +6,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-char *port, *data_dir, *url, *seed;
+char *port = "8080";
+char *data_dir = "/srv/clink";
+char *seed = "secret";
+
 static struct mg_serve_http_opts s_http_server_opts;
 
 static void rec_mkdir(const char *dir) {
@@ -124,7 +127,7 @@ int main(int argc, char *argv[]) {
 
     opterr = 0;
 
-    while ((c = getopt (argc, argv, "p:d:s:")) != -1) {
+    while ((c = getopt (argc, argv, "p:d:s:h")) != -1) {
         switch (c) {
         case 'p':
             port = optarg;
@@ -134,6 +137,16 @@ int main(int argc, char *argv[]) {
             break;
         case 's':
             seed = optarg;
+            break;
+        case 'h':
+            printf("clink: a minimal URL shortener\n");
+            printf("usage: %s [-p port] [-d data_dir] [-s seed]\n\n", argv[0]);
+            printf("options:\n");
+            printf("-p <port>\t\tport to use (default 8080)\n");
+            printf("-d <data directory>\tdirectory to store data (default /srv/clink)\n");
+            printf("-s <seed>\t\tsecret seed to use (DO NOT SHARE THIS; default 'secret')\n\n");
+            printf("source: https://git.swurl.xyz/swirl/clink (submit bug reports, suggestions, etc. here)\n");
+            return 0;
             break;
         case '?':
             if (optopt == 'p' || optopt == 'd' || optopt == 's')
