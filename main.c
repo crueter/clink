@@ -218,7 +218,7 @@ int main(int argc, char *argv[]) {
             printf("-p <port>\t\tport to use (default 8080)\n");
             printf("-d <data directory>\tdirectory to store data (default /srv/clink)\n");
             printf("-s <seed>\t\tsecret seed to use (DO NOT SHARE THIS; default 'secret')\n\n");
-            printf("source: https://git.swurl.xyz/swirl/clink (submit bug reports, suggestions, etc. here)\n");
+            printf("source: https://short.swurl.xyz/src (submit bug reports, suggestions, etc. here)\n");
             return 0;
             break;
         case '?':

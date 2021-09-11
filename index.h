@@ -57,7 +57,7 @@ const char *INDEX_HTML =
 "   this short link does not exist\r\n"
 "   $ # Link has been deleted</code></pre>\r\n"
 "\r\n"
-"<footer style='white-space: pre;'>Source code:  <a href='https://git.swurl.xyz/swirl/clink'>git.swurl.xyz/swirl/clink</a></a>\r\n"
+"<footer style='white-space: pre;'>Source code:  <a href='https://short.swurl.xyz/src'>short.swurl.xyz/src</a></a>\r\n"
 "</footer>\r\n"
 "</html>\r\n";
 
