@@ -1,16 +1,19 @@
 #include "mongoose.h"
+#include "index.h"
 #include <string.h>
 #include <sys/stat.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <crypt.h>
+#include <time.h>
 
 char *port = "8080";
 char *data_dir = "/srv/clink";
 char *seed = "secret";
 
-static struct mg_serve_http_opts s_http_server_opts;
+static struct mg_http_serve_opts s_http_server_opts;
 
 static void rec_mkdir(const char *dir) {
     char tmp[256];
@@ -36,88 +39,156 @@ bool file_exists(char *filename) {
 }
 
 char *get_link_filename(char *link) {
-    char *filename = malloc(strlen(data_dir) + strlen(link) + 1);
-    sprintf(filename, "%s/links%s", data_dir, link);
+    char *filename = malloc(strlen(data_dir) + strlen(link) + 8);
+    sprintf(filename, "%s/links/%s", data_dir, link);
+    return filename;
+}
+
+char *get_del_filename(char *link) {
+    char *filename = malloc(strlen(data_dir) + strlen(link) + 6);
+    sprintf(filename, "%s/del/%s", data_dir, link);
     return filename;
 }
 
 bool link_exists(char *link) {
-    char *filename = malloc(strlen(data_dir) + strlen(link) + 1);
-    sprintf(filename, "%s/links%s", data_dir, link);
-    return file_exists(filename);
+    return file_exists(get_link_filename(link));
 }
 
 FILE *get_link_file(char *link, const char *mode) {
     return fopen(get_link_filename(link), mode);
 }
 
+FILE *get_del_file(char *link, const char *mode) {
+    return fopen(get_del_filename(link), mode);
+}
+
+char *random_short_link() {
+    srand(time(NULL));
+    char *short_link = malloc(17);
+    for(size_t i = 0; i < 16; i++) {
+        sprintf(short_link + i, "%x", rand() % 16);
+    }
+    return short_link;
+}
+
+char *gen_del_key(char *link) {
+    char salt[50];
+    sprintf(salt, "$6$%s%d", seed, (int)time(NULL));
+
+    char *del_key = crypt(link, salt);
+
+    return del_key;
+}
+
+void trim(char *str) {
+    char *_str = str;
+    int len = strlen(_str);
+
+    while(isspace(_str[len - 1])) _str[--len] = 0;
+    while(*_str && *_str == '/') ++_str, --len;
+
+    memmove(str, _str, len + 1);
+}
+
 void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) {
-    if (strncmp(to, "", 1) != 0) {
-        if (strncmp(link, "/", 2) == 0) {
-            mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s", to);
-        } else {
-            mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nmaking short url to %s, with url https://%s%s", to, host, link);
-            FILE *url = get_link_file(link, "w+");
-            fputs(to, url);
-            fclose(url);
-        }
+    char *short_link;
+    if (strlen(link) == 0) {
+        short_link = random_short_link();
     } else {
-        if (strncmp(link, "/", 2) == 0) {
-            mg_printf(nc, "HTTP/1.0 200 OK\r\n\r\nwelcome to link shortener\r\nexample: curl https://%s/?duckduckgo.com", host);
+        short_link = link;
+    }
+
+    if (link_exists(short_link)) {
+        mg_http_reply(nc, 500, "", "short link %s already exists", link);
+        return;
+    }
+
+    FILE *url = get_link_file(short_link, "w+");
+    fputs(to, url);
+    fclose(url);
+
+    FILE *del = get_del_file(short_link, "w+");
+    char *del_key = gen_del_key(short_link);
+    fputs(del_key, del);
+    fclose(del);
+
+    char *del_header = malloc(256);
+    sprintf(del_header, "X-Delete-With: %s\r\n", del_key);
+
+    mg_http_reply(nc, 201, del_header, "http://%s/%s", host, short_link);
+}
+
+void handle_url_req(struct mg_connection *nc, char *to, char *host, char *link) {
+    if (strlen(to) != 0) {
+        make_short_url(nc, to, host, link);
+    } else {
+        if (strlen(link) == 0) {
+            mg_http_reply(nc, 200, "Content-Type: text/html\r\n", INDEX_HTML,
+                          host, host, host, host, host, host, host, host, host, host, host); // FIXME: need better solution
         } else {
             if (link_exists(link)) {
                 FILE *url = get_link_file(link, "r");
                 char *urlto = malloc(256);
                 fgets(urlto, 256, url);
                 fclose(url);
-                mg_http_send_redirect(nc, 302, mg_mk_str(urlto), mg_mk_str(NULL));
+                char *loc = malloc(strlen(urlto) + 14);
+                sprintf(loc, "Location: %s\r\n", urlto);
+                mg_http_reply(nc, 302, loc, urlto);
             } else {
-                mg_printf(nc, "HTTP/1.0 404 Not Found\r\n\r\nthis short link does not exist");
+                mg_http_reply(nc, 404, "", "this short link does not exist");
             }
         }
     }
 }
 
-static void ev_handler(struct mg_connection *nc, int ev, void *p) {
-    if (ev == MG_EV_HTTP_REQUEST) {
-        struct http_message *hm = (struct http_message *) p;
-        char *uri = strdup(hm->uri.p);
-        char *base_uri = strtok(uri, "?");
-        char *base_uri2 = malloc(hm->uri.len + 1);
-
-        snprintf(base_uri2, hm->uri.len + 1, "%s", base_uri);
-        printf("%s\n", base_uri2);
-
-        char *base_query2 = malloc(256);
-        if (hm->query_string.len > 0) {
-            char *query = strdup(hm->query_string.p);
-            char *base_query = malloc(hm->query_string.len + 1);
-            snprintf(base_query, hm->query_string.len + 1, "%s", query);
-            mg_url_decode(base_query, hm->query_string.len + 1, base_query2, 256, 0);
-            printf("%s\n", base_query2);
+void handle_delete(struct mg_connection *nc, char *link, char *del_key) {
+    if (link_exists(link)) {
+        FILE *del = get_del_file(link, "r");
+        char *key = malloc(256);
+        fgets(key, 256, del);
+        if (strcmp(key, del_key) == 0) {
+            remove(get_link_filename(link));
+            remove(get_del_filename(link));
+            mg_http_reply(nc, 204, "", "");
         } else {
-            base_query2 = "";
+            mg_http_reply(nc, 403, "", "incorrect deletion key");
+        }
+    } else {
+        mg_http_reply(nc, 404, "", "this short link does not exist");
+    }
+}
+
+static void ev_handler(struct mg_connection *nc, int ev, void *p, void *f) {
+    if (ev == MG_EV_HTTP_MSG) {
+        struct mg_http_message *hm = (struct mg_http_message *) p;
+        char *uri = malloc(hm->uri.len + 1);
+
+        snprintf(uri, hm->uri.len + 1, "%s", hm->uri.ptr);
+        trim(uri);
+
+        char *query = malloc(256);
+        struct mg_str hquery = hm->query;
+        if (hquery.len > 0) {
+            char *base_query = malloc(hquery.len + 1);
+            snprintf(base_query, hquery.len + 1, "%s", hquery.ptr);
+            mg_url_decode(base_query, hquery.len + 1, query, 256, 0);
+        } else {
+            query = "";
         }
 
-        struct mg_str *host = mg_get_http_header(hm, "Host");
-        char *uhost = strdup(host->p);
+        struct mg_str *mhost = mg_http_get_header(hm, "Host");
+        char *host = malloc(mhost->len + 1);
+        snprintf(host, mhost->len + 1, "%s", mhost->ptr);
 
-        char *fhost = malloc(host->len + 1);
-        snprintf(fhost, host->len + 1, "%s", uhost);
+        char *body = strdup(hm->body.ptr);
 
-        printf("%s\n", fhost);
-
-        if (strncmp(hm->method.p, "POST", hm->method.len) == 0) {
-            struct mg_str body = hm->body;
-            char *post_body = malloc(body.len + 1);
-            snprintf(post_body, body.len + 1, "%s", body.p);
-
-            printf("%s\n", post_body);
-            make_short_url(nc, post_body, fhost, base_uri2);
+        if (strncmp(hm->method.ptr, "POST", hm->method.len) == 0) {
+            handle_url_req(nc, body, host, uri);
+        } else if (strncmp(hm->method.ptr, "DELETE", hm->method.len) == 0) {
+            handle_delete(nc, uri, body);
         } else {
-            make_short_url(nc, base_query2, fhost, base_uri2);
+            handle_url_req(nc, query, host, uri);
         }
-        nc->flags |= MG_F_SEND_AND_CLOSE;
     }
 }
 
@@ -163,9 +234,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    printf ("port = %s, data dir = %s, seed = %s\n",
-                    port, data_dir, seed);
-
     for (index = optind; index < argc; index++)
         printf ("Non-option argument %s\n", argv[index]);
     rec_mkdir(strcat(strdup(data_dir), "/links"));
@@ -173,17 +241,15 @@ int main(int argc, char *argv[]) {
     struct mg_mgr mgr;
     struct mg_connection *nc;
 
-    mg_mgr_init(&mgr, NULL);
+    mg_mgr_init(&mgr);
     printf("Starting web server on port %s\n", port);
-    nc = mg_bind(&mgr, port, ev_handler);
+    char *str_port = malloc(20);
+    sprintf(str_port, "http://localhost:%s", port);
+    nc = mg_http_listen(&mgr, str_port, ev_handler, &mgr);
     if (nc == NULL) {
         printf("Failed to create listener\n");
         return 1;
     }
-    // Set up HTTP server parameters
-    mg_set_protocol_http_websocket(nc);
-    s_http_server_opts.document_root = ".";  // Serve current directory
-    s_http_server_opts.enable_directory_listing = "yes";
 
     for (;;) {
         mg_mgr_poll(&mgr, 1000);

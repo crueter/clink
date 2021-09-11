@@ -5,8 +5,8 @@ BIN			:= clink
 
 SOURCE	:= main.c mongoose.c
 OBJ		:= mongoose.o main.o
-DEPS	:= mongoose.h
-LIBS	:=
+DEPS	:= mongoose.h index.h
+LIBS	:= -lcrypt
 
 all: $(BIN)
 
