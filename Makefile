@@ -1,3 +1,9 @@
+prefix=/usr/local
+confdir=/etc
+systemd_dir=${DESTDIR}${confdir}/systemd/system
+nginx_dir=${DESTDIR}${confdir}/nginx
+bindir=${DESTDIR}${prefix}/bin
+
 CC			:= gcc
 CFLAGS		:= -O2
 
@@ -26,4 +32,4 @@ install-systemd:
 install-bin:
 	@install -Dm755 ${BIN} ${bindir}/${BIN}
 
-install: build install-bin install-nginx install-systemd
+install: install-bin install-nginx install-systemd

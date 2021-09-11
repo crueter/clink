@@ -1,5 +1,6 @@
 #include "mongoose.h"
 #include "index.h"
+
 #include <string.h>
 #include <sys/stat.h>
 #include <ctype.h>
@@ -197,6 +198,7 @@ int main(int argc, char *argv[]) {
     int c;
 
     opterr = 0;
+    setvbuf(stdout, NULL, _IONBF, 0);
 
     while ((c = getopt (argc, argv, "p:d:s:h")) != -1) {
         switch (c) {
@@ -244,7 +246,7 @@ int main(int argc, char *argv[]) {
     mg_mgr_init(&mgr);
     printf("Starting web server on port %s\n", port);
     char *str_port = malloc(20);
-    sprintf(str_port, "http://localhost:%s", port);
+    sprintf(str_port, "http://0.0.0.0:%s", port);
     nc = mg_http_listen(&mgr, str_port, ev_handler, &mgr);
     if (nc == NULL) {
         printf("Failed to create listener\n");

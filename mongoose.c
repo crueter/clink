@@ -301,10 +301,119 @@ bool mg_http_match_uri(const struct mg_http_message *hm, const char *glob) {
   return mg_globmatch(glob, strlen(glob), hm->uri.ptr, hm->uri.len);
 }
 
+static size_t get_chunk_length(const char *buf, size_t len, size_t *ll) {
+  size_t i = 0, n;
+  while (i < len && buf[i] != '\r' && i != '\n') i++;
+  n = mg_unhexn((char *) buf, i);
+  while (i < len && (buf[i] == '\r' || i == '\n')) i++;
+  // LOG(LL_INFO, ("len %zu i %zu n %zu ", len, i, n));
+  if (ll != NULL) *ll = i + 1;
+  if (i < len && i + n + 2 < len) return i + n + 3;
+  return 0;
+}
+
+// Walk through all chunks in the chunked body. For each chunk, fire
+// an MG_EV_HTTP_CHUNK event.
+static void walkchunks(struct mg_connection *c, struct mg_http_message *hm,
+                       size_t reqlen) {
+  size_t off = 0, bl, ll;
+  while (off + reqlen < c->recv.len) {
+    char *buf = (char *) &c->recv.buf[reqlen];
+    size_t memo = c->recv.len;
+    size_t cl = get_chunk_length(&buf[off], memo - reqlen - off, &ll);
+    // LOG(LL_INFO, ("len %zu off %zu cl %zu ll %zu", len, off, cl, ll));
+    if (cl == 0) break;
+    hm->chunk = mg_str_n(&buf[off + ll], cl < ll + 2 ? 0 : cl - ll - 2);
+    mg_call(c, MG_EV_HTTP_CHUNK, hm);
+    // Increase offset only if user has not deleted this chunk
+    if (memo == c->recv.len) off += cl;
+    if (cl <= 5) {
+      // Zero chunk - last one. Prepare body - cut off chunk lengths
+      off = bl = 0;
+      while (off + reqlen < c->recv.len) {
+        char *buf2 = (char *) &c->recv.buf[reqlen];
+        size_t memo2 = c->recv.len;
+        size_t cl2 = get_chunk_length(&buf2[off], memo2 - reqlen - off, &ll);
+        size_t n = cl2 < ll + 2 ? 0 : cl2 - ll - 2;
+        memmove(buf2 + bl, buf2 + off + ll, n);
+        bl += n;
+        off += cl2;
+        if (cl2 <= 5) break;
+      }
+      // LOG(LL_INFO, ("BL->%d del %d off %d", (int) bl, (int) del, (int) off));
+      c->recv.len -= off - bl;
+      // Set message length to indicate we've received
+      // everything, to fire MG_EV_HTTP_MSG
+      hm->message.len = bl + reqlen;
+      hm->body.len = bl;
+      break;
+    }
+  }
+}
+
+static bool mg_is_chunked(struct mg_http_message *hm) {
+  struct mg_str needle = mg_str_n("chunked", 7);
+  struct mg_str *te = mg_http_get_header(hm, "Transfer-Encoding");
+  return te != NULL && mg_strstr(*te, needle) != NULL;
+}
+
+void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm) {
+  struct mg_str ch = hm->chunk;
+  if (mg_is_chunked(hm)) {
+    ch.len += 4;  // \r\n before and after the chunk
+    ch.ptr -= 2;
+    while (ch.ptr > hm->body.ptr && *ch.ptr != '\n') ch.ptr--, ch.len++;
+  }
+  {
+    const char *end = &ch.ptr[ch.len];
+    size_t n = (size_t) (end - (char *) c->recv.buf);
+    if (c->recv.len > n) {
+      memmove((char *) ch.ptr, end, (size_t) (c->recv.len - n));
+    }
+    // LOG(LL_INFO, ("DELETING CHUNK: %zu %zu %zu\n%.*s", c->recv.len, n,
+    // ch.len, (int) ch.len, ch.ptr));
+  }
+  c->recv.len -= ch.len;
+}
+
+static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
+  if (ev == MG_EV_READ || ev == MG_EV_CLOSE) {
+    struct mg_http_message hm;
+    for (;;) {
+      int n = mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
+      bool is_chunked = n > 0 && mg_is_chunked(&hm);
+      if (ev == MG_EV_CLOSE) {
+        hm.message.len = c->recv.len;
+        hm.body.len = hm.message.len - (size_t) (hm.body.ptr - hm.message.ptr);
+      } else if (is_chunked && n > 0) {
+        walkchunks(c, &hm, (size_t) n);
+      }
+      // LOG(LL_INFO,
+      //("---->%d %d\n%.*s", n, is_chunked, (int) c->recv.len, c->recv.buf));
+      if (n < 0 && ev == MG_EV_READ) {
+        mg_error(c, "HTTP parse:\n%.*s", (int) c->recv.len, c->recv.buf);
+        break;
+      } else if (n > 0 && (size_t) c->recv.len >= hm.message.len) {
+        mg_call(c, MG_EV_HTTP_MSG, &hm);
+        mg_iobuf_del(&c->recv, 0, hm.message.len);
+      } else {
+        if (n > 0 && !is_chunked) {
+          hm.chunk =
+              mg_str_n((char *) &c->recv.buf[n], c->recv.len - (size_t) n);
+          mg_call(c, MG_EV_HTTP_CHUNK, &hm);
+        }
+        break;
+      }
+    }
+  }
+  (void) fnd;
+  (void) evd;
+}
+
 struct mg_connection *mg_http_listen(struct mg_mgr *mgr, const char *url,
                                      mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = mg_listen(mgr, url, fn, fn_data);
-  if (c != NULL) c->pfn = fn;
+  if (c != NULL) c->pfn = http_cb;
   return c;
 }
 
