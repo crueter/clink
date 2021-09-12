@@ -109,13 +109,13 @@ Replace `/srv/clink` with whatever your data directory is.
 ## Can I prevent users from making links to specific sites (i.e. illegal content)?
 
 ## Can I blacklist certain words from being used in short links?
-No.
+No. While it might be possible through some NGINX stuff, **this is not supported nor it is encouraged.**
 
 ## Is this an IP grabber?
 No, unless someone links to grabify or something. If access logs are turned on, then the server administrator can see your IP, but management of access logs is up to them.
 
 ## Can I use this without a reverse proxy?
-Probably, I don't know.
+Probably, I don't know. Won't have HTTPS though, so either way, I heavily recommend you use a reverse proxy.
 
 ## What's the seed for?
 The seed is used for generating deletion keys (as a salt). Do not share it whatsoever. I recommend using a seed under 16 characters, as if it is less than 16 characters, random characters will be appended to the salt, making "guessing" the deletion key harder.

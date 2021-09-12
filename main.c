@@ -127,7 +127,9 @@ void handle_url_req(struct mg_connection *nc, char *to, char *host, char *link) 
             mg_http_reply(nc, 200, "Content-Type: text/html\r\n", INDEX_HTML,
                           host, host, host, host, host, host, host, host, host, host, host); // FIXME: need better solution
         } else {
-            if (link_exists(link)) {
+            if (strncmp(link, "favicon.ico", 12) == 0) {
+                mg_http_reply(nc, 404, "", "Not Found");
+            } else if (link_exists(link)) {
                 FILE *url = get_link_file(link, "r");
                 char *urlto = malloc(256);
                 fgets(urlto, 256, url);
