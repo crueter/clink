@@ -94,7 +94,6 @@ void trim(char *str) {
     char *_str = str;
     int len = strlen(_str);
 
-    while(isspace(_str[len - 1])) _str[--len] = 0;
     while(*_str && *_str == '/') ++_str, --len;
 
     memmove(str, _str, len + 1);
@@ -104,13 +103,14 @@ void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) 
     char *short_link;
     if (strlen(link) == 0) {
         short_link = random_short_link();
+    } else if (strlen(link) >= 255) {
+        return mg_http_reply(nc, 400, "", "short link length can not exceed 255 characters");
     } else {
         short_link = link;
     }
 
     if (link_exists(short_link)) {
-        mg_http_reply(nc, 500, "", "short link %s already exists", link);
-        return;
+        return mg_http_reply(nc, 500, "", "short link %s already exists", link);
     }
 
     FILE *url = get_link_file(short_link, "w+");
@@ -133,8 +133,8 @@ void handle_url_req(struct mg_connection *nc, char *to, char *host, char *link) 
         make_short_url(nc, to, host, link);
     } else {
         if (strlen(link) == 0) {
-            mg_http_reply(nc, 200, "Content-Type: text/html\r\n", INDEX_HTML,
-                          host, host, host, host, host, host, host, host, host, host, host); // FIXME: need better solution
+            return mg_http_reply(nc, 200, "Content-Type: text/html\r\n", INDEX_HTML,
+                                 host, host, host, host, host, host, host, host, host, host, host); // FIXME: need better solution
         } else {
             if (strncmp(link, "favicon.ico", 12) == 0) {
                 mg_http_reply(nc, 404, "", "Not Found");
@@ -195,7 +195,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p, void *f) {
         char *body = strdup(hm->body.ptr);
 
         if (strncmp(hm->method.ptr, "POST", hm->method.len) == 0) {
-            handle_url_req(nc, body, host, uri);
+            handle_url_req(nc, body, host, uri); // FIXME: return 400 on bad Content-Type
         } else if (strncmp(hm->method.ptr, "DELETE", hm->method.len) == 0) {
             handle_delete(nc, uri, body);
         } else {
@@ -231,7 +231,6 @@ int main(int argc, char *argv[]) {
             printf("-s <seed>\t\tsecret seed to use (DO NOT SHARE THIS; default 'secret')\n\n");
             printf("source: https://short.swurl.xyz/src (submit bug reports, suggestions, etc. here)\n");
             return 0;
-            break;
         case '?':
             if (optopt == 'p' || optopt == 'd' || optopt == 's')
                 fprintf (stderr, "Option -%c requires an argument.\n", optopt);

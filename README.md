@@ -139,4 +139,4 @@ While the original link was by far the best link shortener I could find, it had 
 
 The first two are mostly problems when using them with specific services; i.e. PrivateBin, which expects to be able to use query-strings and encoded URLs.
 
-So, seeing those problems, I decided to fork it. However, Go is absolute anal cancer (~300 line file results in a 8MB executable), so I decided to write it in C (and now, it's ~250 lines and results in a ~60KB executable). Also, I like C.
+So, seeing those problems, I decided to fork it. However, Go is absolute anal cancer (~300 line file results in a 8MB executable), so I decided to write it in C (and now, it's ~270 lines and results in a ~60KB executable). Also, I like C.
