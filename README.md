@@ -106,9 +106,7 @@ rm /srv/clink/*/BADLINKHERE
 
 Replace `/srv/clink` with whatever your data directory is.
 
-## Can I prevent users from making links to specific sites (i.e. illegal content)?
-
-## Can I blacklist certain words from being used in short links?
+## Can I prevent users from making links to specific sites (i.e. illegal content)? Can I blacklist certain words from being used in short links?
 No. While it might be possible through some NGINX stuff, **this is not supported nor it is encouraged.**
 
 ## Is this an IP grabber?
@@ -118,7 +116,7 @@ No, unless someone links to grabify or something. If access logs are turned on, 
 Probably, I don't know. Won't have HTTPS though, so either way, I heavily recommend you use a reverse proxy.
 
 ## What's the seed for?
-The seed is used for generating deletion keys (as a salt). Do not share it whatsoever. I recommend using a seed under 16 characters, as if it is less than 16 characters, random characters will be appended to the salt, making "guessing" the deletion key harder.
+The seed is used for generating deletion keys. Do not share it whatsoever.
 
 ## What operating systems are supported?
 I've only tested it on my Arch Linux server, but it should work perfectly fine on all Linux distributions. Probably doesn't work on Windows.

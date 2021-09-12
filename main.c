@@ -66,17 +66,26 @@ FILE *get_del_file(char *link, const char *mode) {
 char *random_short_link() {
     srand(time(NULL));
     char *short_link = malloc(17);
-    for(size_t i = 0; i < 16; i++) {
+    for(size_t i = 0; i < 16; ++i) {
         sprintf(short_link + i, "%x", rand() % 16);
     }
     return short_link;
 }
 
 char *gen_del_key(char *link) {
-    char salt[50];
-    sprintf(salt, "$6$%s%d", seed, (int)time(NULL));
+    char *salt = malloc(20);
+    char *rand_str = malloc(17);
+    srand(time(NULL));
+    for (size_t i = 0; i < 16; ++i) {
+        rand_str[i] = 33 + (rand() % 94); // random printable char
+    }
+    rand_str[16] = 0;
+    sprintf(salt, "$6$%s", rand_str);
 
-    char *del_key = crypt(link, salt);
+    char *use_link = malloc(strlen(link) + strlen(seed) + 1);
+    sprintf(use_link, "%s%s", seed, link);
+
+    char *del_key = crypt(use_link, salt);
 
     return del_key;
 }
