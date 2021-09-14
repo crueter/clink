@@ -66,9 +66,11 @@ FILE *get_del_file(char *link, const char *mode) {
 char *random_short_link() {
     srand(time(NULL));
     char *short_link = malloc(17);
-    for(size_t i = 0; i < 16; ++i) {
-        sprintf(short_link + i, "%x", rand() % 16);
-    }
+    do {
+        for(size_t i = 0; i < 16; ++i) {
+            sprintf(short_link + i, "%x", rand() % 16);
+        }
+    } while (link_exists(short_link));
     return short_link;
 }
 
@@ -77,7 +79,9 @@ char *gen_del_key(char *link) {
     char *rand_str = malloc(17);
     srand(time(NULL));
     for (size_t i = 0; i < 16; ++i) {
-        rand_str[i] = 33 + (rand() % 94); // random printable char
+        rand_str[i] = 37 + (rand() % 90); // random printable char
+        if (rand_str[i] == 92 || rand_str[i] == 58 ||
+            rand_str[i] == 59 || rand_str[i] == 42) --i; // chars not allowed for salts
     }
     rand_str[16] = 0;
     sprintf(salt, "$6$%s", rand_str);
@@ -110,7 +114,7 @@ void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) 
     }
 
     if (link_exists(short_link)) {
-        return mg_http_reply(nc, 500, "", "short link %s already exists", link);
+        return mg_http_reply(nc, 500, "", "short link %s already exists", short_link);
     }
 
     FILE *url = get_link_file(short_link, "w+");
