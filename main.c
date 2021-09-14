@@ -104,7 +104,7 @@ void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) 
     if (strlen(link) == 0) {
         short_link = random_short_link();
     } else if (strlen(link) >= 255) {
-        return mg_http_reply(nc, 400, "", "short link length can not exceed 255 characters");
+        return mg_http_reply(nc, 413, "", "short link length can not exceed 255 characters");
     } else {
         short_link = link;
     }
@@ -138,10 +138,12 @@ void handle_url_req(struct mg_connection *nc, char *to, char *host, char *link) 
         } else {
             if (strncmp(link, "favicon.ico", 12) == 0) {
                 mg_http_reply(nc, 404, "", "Not Found");
+            } else if (strlen(link) >= 255) {
+                mg_http_reply(nc, 414, "", "short link length can not exceed 255 characters");
             } else if (link_exists(link)) {
                 FILE *url = get_link_file(link, "r");
                 char *urlto = malloc(256);
-                fgets(urlto, 256, url);
+                fgets(urlto, 255, url);
                 fclose(url);
                 char *loc = malloc(strlen(urlto) + 14);
                 sprintf(loc, "Location: %s\r\n", urlto);
@@ -157,7 +159,7 @@ void handle_delete(struct mg_connection *nc, char *link, char *del_key) {
     if (link_exists(link)) {
         FILE *del = get_del_file(link, "r");
         char *key = malloc(256);
-        fgets(key, 256, del);
+        fgets(key, 255, del);
         if (strcmp(key, del_key) == 0) {
             remove(get_link_filename(link));
             remove(get_del_filename(link));
@@ -198,8 +200,10 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p, void *f) {
             handle_url_req(nc, body, host, uri); // FIXME: return 400 on bad Content-Type
         } else if (strncmp(hm->method.ptr, "DELETE", hm->method.len) == 0) {
             handle_delete(nc, uri, body);
-        } else {
+        } else if (strncmp(hm->method.ptr, "GET", hm->method.len) == 0){
             handle_url_req(nc, query, host, uri);
+        } else {
+            mg_http_reply(nc, 405, "Allow: GET, POST, DELETE\r\n", "");
         }
     }
 }
@@ -232,22 +236,25 @@ int main(int argc, char *argv[]) {
             printf("source: https://short.swurl.xyz/src (submit bug reports, suggestions, etc. here)\n");
             return 0;
         case '?':
-            if (optopt == 'p' || optopt == 'd' || optopt == 's')
-                fprintf (stderr, "Option -%c requires an argument.\n", optopt);
-            else if (isprint (optopt))
-                fprintf (stderr, "Unknown option `-%c'.\n", optopt);
-            else
-                fprintf (stderr,
-                                 "Unknown option character `\\x%x'.\n",
-                                 optopt);
+            if (optopt == 'p' || optopt == 'd' || optopt == 's') {
+                fprintf(stderr, "Option -%c requires an argument.\n", optopt);
+            }
+            else if (isprint (optopt)) {
+                fprintf(stderr, "Unknown option `-%c'.\n", optopt);
+            }
+            else {
+                fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
+            }
             return 1;
         default:
-            abort ();
+            abort();
         }
     }
 
-    for (index = optind; index < argc; index++)
+    for (index = optind; index < argc; index++) {
         printf ("Non-option argument %s\n", argv[index]);
+    }
+
     rec_mkdir(strcat(strdup(data_dir), "/links"));
     rec_mkdir(strcat(strdup(data_dir), "/del"));
     struct mg_mgr mgr;
@@ -263,9 +270,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    for (;;) {
-        mg_mgr_poll(&mgr, 1000);
-    }
+    for (;;) { mg_mgr_poll(&mgr, 1000); }
     mg_mgr_free(&mgr);
     return 0;
 }
