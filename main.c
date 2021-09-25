@@ -236,7 +236,7 @@ int main(int argc, char *argv[]) {
             break;
         case 'h':
             printf("clink: a minimal URL shortener\n");
-            printf("usage: %s [-p port] [-d data_dir] [-s seed]\n\n", argv[0]);
+            printf("usage: %s [-p port] [-d data_dir] [-s seed] [-k]\n\n", argv[0]);
             printf("options:\n");
             printf("-p <port>\t\tport to use (default 8080)\n");
             printf("-d <data directory>\tdirectory to store data (default /srv/clink)\n");
