@@ -13,6 +13,7 @@
 char *port = "8080";
 char *data_dir = "/srv/clink";
 char *seed = "secret";
+char *proto = "http://";
 
 static struct mg_http_serve_opts s_http_server_opts;
 
@@ -129,7 +130,7 @@ void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) 
     char *del_header = malloc(256);
     sprintf(del_header, "X-Delete-With: %s\r\n", del_key);
 
-    mg_http_reply(nc, 201, del_header, "http://%s/%s", host, short_link);
+    mg_http_reply(nc, 201, del_header, "%s%s/%s", proto, host, short_link);
 }
 
 void handle_url_req(struct mg_connection *nc, char *to, char *host, char *link) {
@@ -219,7 +220,7 @@ int main(int argc, char *argv[]) {
     opterr = 0;
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    while ((c = getopt (argc, argv, "p:d:s:h")) != -1) {
+    while ((c = getopt (argc, argv, "p:d:s:kh")) != -1) {
         switch (c) {
         case 'p':
             port = optarg;
@@ -230,13 +231,17 @@ int main(int argc, char *argv[]) {
         case 's':
             seed = optarg;
             break;
+        case 'k':
+            proto = "https://";
+            break;
         case 'h':
             printf("clink: a minimal URL shortener\n");
             printf("usage: %s [-p port] [-d data_dir] [-s seed]\n\n", argv[0]);
             printf("options:\n");
             printf("-p <port>\t\tport to use (default 8080)\n");
             printf("-d <data directory>\tdirectory to store data (default /srv/clink)\n");
-            printf("-s <seed>\t\tsecret seed to use (DO NOT SHARE THIS; default 'secret')\n\n");
+            printf("-s <seed>\t\tsecret seed to use (DO NOT SHARE THIS; default 'secret')\n");
+            printf("-k\t\t\treturns HTTPS URLs when uploading files, use with an HTTPS-enabled reverse proxy\n\n");
             printf("source: https://short.swurl.xyz/src (submit bug reports, suggestions, etc. here)\n");
             return 0;
         case '?':
