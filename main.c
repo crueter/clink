@@ -118,6 +118,10 @@ void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) 
         return mg_http_reply(nc, 500, "", "short link %s already exists", short_link);
     }
 
+    if (strstr(short_link, "/")) {
+        return mg_http_reply(nc, 400, "", "short link can not contain slashes");
+    }
+
     FILE *url = get_link_file(short_link, "w+");
     fputs(to, url);
     fclose(url);

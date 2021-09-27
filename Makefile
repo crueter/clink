@@ -5,7 +5,7 @@ nginx_dir=${DESTDIR}${confdir}/nginx
 bindir=${DESTDIR}${prefix}/bin
 
 CC			:= gcc
-CFLAGS		:= -O2
+CFLAGS		:= -O2 ${CFLAGS}
 
 BIN			:= clink
 
