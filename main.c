@@ -56,14 +56,6 @@ bool link_exists(char *link) {
     return file_exists(get_link_filename(link));
 }
 
-FILE *get_link_file(char *link, const char *mode) {
-    return fopen(get_link_filename(link), mode);
-}
-
-FILE *get_del_file(char *link, const char *mode) {
-    return fopen(get_del_filename(link), mode);
-}
-
 char *random_short_link() {
     srand(time(NULL));
     char *short_link = malloc(17);
@@ -122,14 +114,16 @@ void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) 
         return mg_http_reply(nc, 400, "", "short link can not contain slashes");
     }
 
-    FILE *url = get_link_file(short_link, "w+");
-    fputs(to, url);
-    fclose(url);
+    if (!mg_file_write(get_link_filename(short_link), to, strlen(to))) {
+        fprintf(stderr, "failed to write to file %s", get_link_filename(short_link));
+        return mg_http_reply(nc, 500, "", "failed to write data");
+    }
 
-    FILE *del = get_del_file(short_link, "w+");
     char *del_key = gen_del_key(short_link);
-    fputs(del_key, del);
-    fclose(del);
+    if (!mg_file_write(get_del_filename(short_link), del_key, strlen(del_key))) {
+        fprintf(stderr, "failed to write to file %s", get_del_filename(short_link));
+        return mg_http_reply(nc, 500, "", "failed to write data");
+    }
 
     char *del_header = malloc(256);
     sprintf(del_header, "X-Delete-With: %s\r\n", del_key);
@@ -150,11 +144,9 @@ void handle_url_req(struct mg_connection *nc, char *to, char *host, char *link) 
             } else if (strlen(link) >= 255) {
                 mg_http_reply(nc, 414, "", "short link length can not exceed 255 characters");
             } else if (link_exists(link)) {
-                FILE *url = get_link_file(link, "r");
-                char *urlto = malloc(256);
-                fgets(urlto, 255, url);
-                fclose(url);
-                char *loc = malloc(strlen(urlto) + 14);
+                size_t urlto_size;
+                char *urlto = mg_file_read(get_link_filename(link), &urlto_size);
+                char *loc = malloc(urlto_size + 14);
                 sprintf(loc, "Location: %s\r\n", urlto);
                 mg_http_reply(nc, 302, loc, urlto);
             } else {
@@ -166,9 +158,7 @@ void handle_url_req(struct mg_connection *nc, char *to, char *host, char *link) 
 
 void handle_delete(struct mg_connection *nc, char *link, char *del_key) {
     if (link_exists(link)) {
-        FILE *del = get_del_file(link, "r");
-        char *key = malloc(256);
-        fgets(key, 255, del);
+        char *key = mg_file_read(get_del_filename(link), NULL);
         if (strcmp(key, del_key) == 0) {
             remove(get_link_filename(link));
             remove(get_del_filename(link));
@@ -199,9 +189,17 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p, void *f) {
             query = "";
         }
 
-        struct mg_str *mhost = mg_http_get_header(hm, "Host");
-        char *host = malloc(mhost->len + 1);
-        snprintf(host, mhost->len + 1, "%s", mhost->ptr);
+        struct mg_str *pmhost = mg_http_get_header(hm, "Host");
+        struct mg_str mhost;
+        if (pmhost == NULL) {
+            fprintf(stderr, "request sent with no Host header");
+            mhost = mg_str("<UNKNOWN DOMAIN>");
+        } else {
+            mhost = *pmhost;
+        }
+
+        char *host = malloc(mhost.len + 1);
+        snprintf(host, mhost.len + 1, "%s", mhost.ptr);
 
         char *body = strdup(hm->body.ptr);
 
