@@ -53,7 +53,10 @@ char *get_del_filename(char *link) {
 }
 
 bool link_exists(char *link) {
-    return file_exists(get_link_filename(link));
+    char *filename = get_link_filename(link);
+    bool ret = file_exists(filename);
+    free(filename);
+    return ret;
 }
 
 char *random_short_link() {
@@ -76,13 +79,17 @@ char *gen_del_key(char *link) {
         if (rand_str[i] == 92 || rand_str[i] == 58 ||
             rand_str[i] == 59 || rand_str[i] == 42) --i; // chars not allowed for salts
     }
+
     rand_str[16] = 0;
     sprintf(salt, "$6$%s", rand_str);
+    free(rand_str);
 
     char *use_link = malloc(strlen(link) + strlen(seed) + 1);
     sprintf(use_link, "%s%s", seed, link);
 
     char *del_key = crypt(use_link, salt);
+    free(salt);
+    free(use_link);
 
     return del_key;
 }
@@ -103,7 +110,7 @@ void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) 
     } else if (strlen(link) >= 255) {
         return mg_http_reply(nc, 413, "", "short link length can not exceed 255 characters");
     } else {
-        short_link = link;
+        short_link = strdup(link);
     }
 
     if (link_exists(short_link)) {
@@ -114,21 +121,28 @@ void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) 
         return mg_http_reply(nc, 400, "", "short link can not contain slashes");
     }
 
-    if (!mg_file_write(get_link_filename(short_link), to, strlen(to))) {
-        fprintf(stderr, "failed to write to file %s", get_link_filename(short_link));
+    char *link_file = get_link_filename(short_link);
+    if (!mg_file_write(link_file, to, strlen(to))) {
+        fprintf(stderr, "failed to write to file %s", link_file);
         return mg_http_reply(nc, 500, "", "failed to write data");
     }
+    free(link_file);
 
     char *del_key = gen_del_key(short_link);
-    if (!mg_file_write(get_del_filename(short_link), del_key, strlen(del_key))) {
-        fprintf(stderr, "failed to write to file %s", get_del_filename(short_link));
+    char *del_file = get_del_filename(short_link);
+    if (!mg_file_write(del_file, del_key, strlen(del_key))) {
+        fprintf(stderr, "failed to write to file %s", del_file);
         return mg_http_reply(nc, 500, "", "failed to write data");
     }
+    free(del_file);
 
     char *del_header = malloc(256);
     sprintf(del_header, "X-Delete-With: %s\r\n", del_key);
 
     mg_http_reply(nc, 201, del_header, "%s%s/%s", proto, host, short_link);
+
+    free(del_header);
+    free(short_link);
 }
 
 void handle_url_req(struct mg_connection *nc, char *to, char *host, char *link) {
@@ -145,10 +159,17 @@ void handle_url_req(struct mg_connection *nc, char *to, char *host, char *link) 
                 mg_http_reply(nc, 414, "", "short link length can not exceed 255 characters");
             } else if (link_exists(link)) {
                 size_t urlto_size;
-                char *urlto = mg_file_read(get_link_filename(link), &urlto_size);
+                char *link_file = get_link_filename(link);
+
+                char *urlto = mg_file_read(link_file, &urlto_size);
                 char *loc = malloc(urlto_size + 14);
+
                 sprintf(loc, "Location: %s\r\n", urlto);
                 mg_http_reply(nc, 302, loc, urlto);
+
+                free(urlto);
+                free(loc);
+                free(link_file);
             } else {
                 mg_http_reply(nc, 404, "", "this short link does not exist");
             }
@@ -158,14 +179,20 @@ void handle_url_req(struct mg_connection *nc, char *to, char *host, char *link) 
 
 void handle_delete(struct mg_connection *nc, char *link, char *del_key) {
     if (link_exists(link)) {
-        char *key = mg_file_read(get_del_filename(link), NULL);
+        char *del_file = get_del_filename(link);
+        char *key = mg_file_read(del_file, NULL);
         if (strcmp(key, del_key) == 0) {
-            remove(get_link_filename(link));
-            remove(get_del_filename(link));
+            char *link_file = get_link_filename(link);
+            remove(link_file);
+            remove(del_file);
             mg_http_reply(nc, 204, "", "");
+
+            free(link_file);
         } else {
             mg_http_reply(nc, 403, "", "incorrect deletion key");
         }
+        free(del_file);
+        free(key);
     } else {
         mg_http_reply(nc, 404, "", "this short link does not exist");
     }
@@ -179,12 +206,15 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p, void *f) {
         snprintf(uri, hm->uri.len + 1, "%s", hm->uri.ptr);
         trim(uri);
 
-        char *query = malloc(256);
+        char *query = NULL;
         struct mg_str hquery = hm->query;
         if (hquery.len > 0) {
             char *base_query = malloc(hquery.len + 1);
             snprintf(base_query, hquery.len + 1, "%s", hquery.ptr);
+
+            query = malloc(256);
             mg_url_decode(base_query, hquery.len + 1, query, 256, 0);
+            free(base_query);
         } else {
             query = "";
         }
@@ -212,6 +242,10 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p, void *f) {
         } else {
             mg_http_reply(nc, 405, "Allow: GET, POST, DELETE\r\n", "");
         }
+        free(uri);
+        free(host);
+        free(body);
+        free(query);
     }
 }
 
@@ -266,8 +300,15 @@ int main(int argc, char *argv[]) {
         printf ("Non-option argument %s\n", argv[index]);
     }
 
-    rec_mkdir(strcat(strdup(data_dir), "/links"));
-    rec_mkdir(strcat(strdup(data_dir), "/del"));
+    char *links_dir = strcat(strdup(data_dir), "/links");
+    char *del_dir = strcat(strdup(data_dir), "/del");
+
+    rec_mkdir(links_dir);
+    rec_mkdir(del_dir);
+
+    free(links_dir);
+    free(del_dir);
+
     struct mg_mgr mgr;
     struct mg_connection *nc;
 
