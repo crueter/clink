@@ -216,7 +216,8 @@ static void ev_handler(struct mg_connection *nc, int ev, void *p, void *f) {
             mg_url_decode(base_query, hquery.len + 1, query, 256, 0);
             free(base_query);
         } else {
-            query = "";
+            query = malloc(1);
+            sprintf(query, "");
         }
 
         struct mg_str *pmhost = mg_http_get_header(hm, "Host");
