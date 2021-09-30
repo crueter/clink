@@ -114,17 +114,21 @@ void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) 
     }
 
     if (link_exists(short_link)) {
-        return mg_http_reply(nc, 500, "", "short link %s already exists", short_link);
+        mg_http_reply(nc, 500, "", "short link %s already exists", short_link);
+        return free(short_link);
     }
 
     if (strstr(short_link, "/")) {
-        return mg_http_reply(nc, 400, "", "short link can not contain slashes");
+        mg_http_reply(nc, 400, "", "short link can not contain slashes");
+        return free(short_link);
     }
 
     char *link_file = get_link_filename(short_link);
     if (!mg_file_write(link_file, to, strlen(to))) {
         fprintf(stderr, "failed to write to file %s", link_file);
-        return mg_http_reply(nc, 500, "", "failed to write data");
+        mg_http_reply(nc, 500, "", "failed to write data");
+        free(short_link);
+        return free(link_file);
     }
     free(link_file);
 
@@ -133,6 +137,9 @@ void make_short_url(struct mg_connection *nc, char *to, char *host, char *link) 
     if (!mg_file_write(del_file, del_key, strlen(del_key))) {
         fprintf(stderr, "failed to write to file %s", del_file);
         return mg_http_reply(nc, 500, "", "failed to write data");
+        free(short_link);
+        free(link_file);
+        return free(del_file);
     }
     free(del_file);
 
