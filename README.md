@@ -1,6 +1,11 @@
+# clink
+
 Rewrite of my [fork](https://git.swurl.xyz/swirl/link) of [link](https://fsh.ee). Written in C using [Mongoose](https://cesanta.com).
 
 Please access this project on my [Gitea](https://git.swurl.xyz/swirl/clink) instance, NOT GitHub.
+
+## Maintenance Note
+This project is still maintained! Occasional certificate expirations may occur, this is due to disputes between my ISP and I regarding server hosting and certificate renewal. Please be patient, I have a life. :)
 
 # Differences from link
 - Much smaller executable size
