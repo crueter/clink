@@ -2,9 +2,13 @@ server {
 	rewrite_log on;
 	server_name your.doma.in;
 
+    # Change if needed
+    client_max_body_size 50M;
+
 	location / {
         proxy_set_header Host $host;
         proxy_pass http://localhost:8080;
+        proxy_read_timeout 600s;
 	}
 
     listen 80 ; # use certbot to enable https

@@ -1,0 +1,56 @@
+#!/bin/sh
+if [ "$CLINK_CONF" == "" ]
+then
+    CLINK_CONF="/etc/clink.conf"
+fi
+
+source $CLINK_CONF
+
+function linkgrep() {
+    cd $DIR/links
+    for pattern in $@
+    do
+        grep -Ere "$pattern"
+    done
+}
+
+function linklist() {
+    cd $DIR/links
+    find * -type f || echo "No links are currently stored."
+}
+
+function linkcat() {
+    cd $DIR/links
+    for i in $@
+    do
+        echo "\nlink $i:\n"
+        cat $i
+    done
+}
+
+function linkrm() {
+    cd $DIR
+    for file in $@
+    do
+        rm -vf {del,links}/$file
+    done
+}
+
+case $1 in
+    "grep")
+        linkgrep ${@:2} ;;
+    "ls")
+        linklist ${@:2} ;;
+    "rm")
+        linkrm ${@:2} ;;
+    "cat")
+        linkcat ${@:2} ;;
+    *)
+        echo "clinkctl: CLI utility for managing clink data"
+        echo "syntax: clinkctl [command] <patterns...>"
+        echo "Available commands:"
+        echo "	grep <patterns...>: Search for all links matching patterns"
+        echo "	rm <shortids...>: Remove links specified by the shortids."
+        echo "	ls: List all links."
+        echo "	cat <shortid>: View link content." ;;
+esac

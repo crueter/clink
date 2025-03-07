@@ -100,10 +100,13 @@ Your site should be running at https://your.doma.in. Test it by going there, and
 # Contributions
 Contributions are always welcome.
 
+# clinkctl
+clink contains an additional `clinkctl` utility.
+
+Run `clinkctl` for commands and syntax help.
+
 # FAQ
 ## A user has made a link to a bad site! What do I do?
-Clean it up, janny!
-
 Deleting a link can be done simply by running:
 ```bash
 rm /srv/clink/*/BADLINKHERE

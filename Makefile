@@ -8,6 +8,7 @@ CC			:= gcc
 CFLAGS		:= -O2 ${CFLAGS}
 
 BIN			:= clink
+CLINKCTL 	:= clinkctl
 
 SOURCE	:= main.c mongoose.c
 OBJ		:= mongoose.o main.o
@@ -28,8 +29,11 @@ install-nginx:
 install-systemd:
 	@install -Dm644 doc/clink.service ${systemd_dir}/clink.service
 	@install -Dm644 doc/clink.conf ${DESTDIR}/${confdir}/clink.conf
+	@sed -i 's|BINDIR|${bindir}|' ${DESTDIR}/${confdir}/clink.conf
+	@sed -i 's|BINNAME|${BIN}|' ${DESTDIR}/${confdir}/clink.conf
 
 install-bin:
 	@install -Dm755 ${BIN} ${bindir}/${BIN}
+	@install -Dm755 ${CLINKCTL} ${bindir}/${CLINKCTL}
 
 install: install-bin install-nginx install-systemd
